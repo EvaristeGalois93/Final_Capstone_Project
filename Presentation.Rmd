@@ -1,0 +1,39 @@
+---
+title: "Word Prediction: Final Capstone Project"
+author: "Luca"
+date: "24/10/2021"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+## Overview
+The aim of the project is to build an algorithm for word prediction. To do so, we analyze a massive dataset which comprises tweets, blogs and news. First we conduct an exploratory analysis, creating N-Grams useful for the prediction algorithm. Afterwards, we make use of the [Katz back-off model](https://en.wikipedia.org/wiki/Katz%27s_back-off_model).
+
+## Katz's back-off model
+This is a generative algorithm that estimates the conditional probability of a word given its history in the n-grams. Our data-base is made of 5 tables: **unigram**, **bigram**, ..., up to **five-grams**. Their dimension goes from a minimum of 10K observations for the **unigram**, to a maximum of 27K observations for the **bigram**.
+```{r n-grams, echo=FALSE}
+load("unigram.Rda")
+load("bigram.Rda")
+load("trigram.Rda")
+load("quadrigram.Rda")
+load("fivegram.Rda")
+
+head(DF1)
+```
+
+## Application
+These N-grams are used to predict the next word. The shiny web-app can be found at the following [link](https://evaristegalois.shinyapps.io/CapstoneProject/), whereas its relative code is in the GIT [repository](https://github.com/EvaristeGalois93/Final_Capstone_Project). As previously explained, the app uses the N-grams data to match the input word, choosing the next word accordingly. 
+First, the input word is cleaned, then the code scans each N-gram, starting from the **five-gram**, (the N-gram composed by 5 different words) and going on up to the **unigram**.
+
+## Assessment
+The algorithm is a basic one. Its strength lies on simplicity. It is easy to understand it and computationally efficient. 
+On the other hand, simplicity can be though as a drawback as well: sophisticated procedures based on neural networks might reach a much more precise result, while being much more difficult to comprehend. 
+Moreover, when using such techniques, computational efficiency becomes a crucial point: since we want a procedure for a word predicting app, we need a procedure which is quick.
+
+## Conclusion
+Thanks for having granted me this possibility, I am sure that what I've learnt might come handy in many different ways.
+
+
+

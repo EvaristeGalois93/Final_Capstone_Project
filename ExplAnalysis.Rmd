@@ -1,0 +1,219 @@
+---
+title: "MilestoneReport_TextMining"
+author: "Luca"
+date: "25/9/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+## Introduction
+
+The aim of this first step is to perform an exploratory analysis of the data. We have been provided with a massive data set. Therefore, it is important fundamental to break it down and understand its content.
+To do so, we will sample a set of data from the entire dataset, performing our analysis on it: we want to understand which are the most frequent words, how many unique words exist, the number of n-grams, etc.
+
+```{r libraries, echo=TRUE}
+# to manipulate strings
+library(stringi)
+# these two are for the next packages
+library(NLP); library(openNLP)
+# text mining package
+library(tm)
+# rJava is needed for RWeka
+library(rJava)
+# tokenizer - create unigrams, bigrams, trigrams
+library(RWeka)
+# for the pipeline operator
+library(tidyr)
+# for word-cloud plots
+library(wordcloud)
+# for plots
+library(ggplot2)
+```
+
+## Loading Data
+
+```{r loading, echo=TRUE}
+# set working directory
+setwd("C:/Users/luca-/Desktop/Data_Science/Course10_CapstoneProject")
+
+# create dir
+if (!file.exists("./data")) {
+  dir.create("./data")
+}
+
+FileUrl = "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+
+## if file is not already downloaded, download the file
+if (!file.exists("./data/Swiftkey Dataset.zip")) {
+  download.file(FileUrl, destfile = "./data/Swiftkey Dataset.zip")
+}
+
+## Unzip file to datadirectory if the directory does not yet exist exists
+if (!file.exists("./data/final")) {
+  unzip("./data/Swiftkey Dataset.zip", exdir = "./data")
+}
+
+# Read English files
+blog = readLines("./data/final/en_US/en_US.blogs.txt", skipNul = TRUE, warn= FALSE)
+news = readLines("./data/final/en_US/en_US.news.txt", skipNul = TRUE, warn=FALSE)
+twitter = readLines("./data/final/en_US/en_US.twitter.txt", skipNul = TRUE, warn=FALSE)
+```
+
+Let's take a look at quick summary of the data
+
+```{r summary, echo=TRUE}
+# Get file sizes
+blog.size = file.info("./data/final/en_US/en_US.blogs.txt")$size / 1024 ^ 2
+news.size = file.info("./data/final/en_US/en_US.news.txt")$size / 1024 ^ 2
+twitter.size = file.info("./data/final/en_US/en_US.twitter.txt")$size / 1024 ^ 2
+
+# Get words in files
+blog.words = stri_count_words(blog)
+news.words = stri_count_words(news)
+twitter.words = stri_count_words(twitter)
+
+# Summary of the data sets
+data.frame(source = c("blog", "news", "twitter"),
+           file.size.MB = c(blog.size, news.size, twitter.size),
+           num.lines = c(length(blog), length(news), length(twitter)),
+           num.words = c(sum(blog.words), sum(news.words), sum(twitter.words)),
+           mean.num.words = c(mean(blog.words), mean(news.words), mean(twitter.words)))
+```
+It emerges that we are dealing with a huge dataset. Hence, the need for sampling.
+Following the suggestion given in Task 1, we make use of binomial distribution to randomly sample 1K observations from each dataset.
+
+```{r sample, echo=TRUE}
+set.seed(25092021)
+
+n_obs = 10^3
+
+### make a sample based on seed, probability and number of trials
+blog_sample = blog[rbinom(n_obs, length(blog), .5)]
+news_sample = news[rbinom(n_obs, length(news), .5)]
+twitter_sample = twitter[rbinom(n_obs, length(twitter), .5)]
+
+Tot_sample = c(blog_sample, news_sample, twitter_sample)
+```
+
+### Data Cleaning
+After having uploaded and sampled the data, we can start cleaning it. To do so, we will make use of the package *tm* for text mining. For any reference, [tm](https://mran.microsoft.com/snapshot/2018-03-30/web/packages/tm/vignettes/tm.pdf).
+
+```{r cleaning, echo=TRUE}
+corpus = VCorpus(VectorSource(Tot_sample))
+
+# Cleaning
+corpus = corpus %>%
+  tm_map(removeNumbers) %>%
+  tm_map(removePunctuation) %>%
+  tm_map(stripWhitespace)
+corpus = tm_map(corpus, content_transformer(tolower))
+corpus = tm_map(corpus, removeWords, stopwords("english"))
+```
+
+### Exploratory Analysis
+
+Finally, to perform the analysis needed, we make use of many useful packages, such as *RWeka* and *wordcloud*. Again, for any reference: [RWeka](https://cran.r-project.org/web/packages/RWeka/RWeka.pdf), [wordcloud](https://cran.r-project.org/web/packages/wordcloud/wordcloud.pdf).
+First, we create the N-grams (what is an [N-gram](https://en.wikipedia.org/wiki/N-gram)) and term matrices, which will be useful to compute frequencies and make plots. 
+
+```{r N-grams, echo=TRUE}
+# Creating N-grams
+
+unigram = function(x) {NGramTokenizer(x, Weka_control(min = 1, max = 1))}
+bigram = function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
+trigram = function(x) NGramTokenizer(x, Weka_control(min = 3, max = 3))
+quadrigram = function(x) {NGramTokenizer(x, Weka_control(min = 4, max = 4))}
+fivegram = function(x) {NGramTokenizer(x, Weka_control(min = 5, max = 5))}
+
+
+# Creating Term Matrices
+DTM1 = removeSparseTerms(TermDocumentMatrix(corpus, control = list(tokenize = unigram)),0.9999)
+DTM2 = removeSparseTerms(TermDocumentMatrix(corpus, control = list(tokenize = bigram)),0.9999)
+DTM3 = removeSparseTerms(TermDocumentMatrix(corpus, control = list(tokenize = trigram)),0.9999)
+DTM4 = removeSparseTerms(TermDocumentMatrix(corpus, control = list(tokenize = quadrigram)),0.9999)
+DTM5 = removeSparseTerms(TermDocumentMatrix(corpus, control = list(tokenize = fivegram)),0.9999)
+
+
+# Converting them into matrices and data-frames - useful for wordcloud plots
+M1 = as.matrix(DTM1) 
+WORDS1 = sort(rowSums(M1),decreasing=TRUE) 
+DF1 = data.frame(word = names(WORDS1),freq = WORDS1)
+
+M2 = as.matrix(DTM2) 
+WORDS2 = sort(rowSums(M2),decreasing=TRUE) 
+DF2 = data.frame(word = names(WORDS2),freq = WORDS2)
+
+M3 = as.matrix(DTM3)
+WORDS3 = sort(rowSums(M3),decreasing=TRUE) 
+DF3 = data.frame(word = names(WORDS3),freq = WORDS3)
+
+M4 = as.matrix(DTM4)
+WORDS4 = sort(rowSums(M4),decreasing=TRUE) 
+DF4 = data.frame(word = names(WORDS4),freq = WORDS4)
+
+M5 = as.matrix(DTM5)
+WORDS5 = sort(rowSums(M5),decreasing=TRUE) 
+DF5 = data.frame(word = names(WORDS5),freq = WORDS5)
+```
+
+We can now plot the frequency and the relative word-cloud, for each of the n-gram identified.
+
+```{r freq, echo=TRUE}
+#options(mc.cores=1)
+
+# first create a function to compute the frequency
+getFreq = function(tdm) {
+  freq = sort(rowSums(as.matrix(tdm)), decreasing = TRUE)
+  return(data.frame(word = names(freq), freq = freq))
+}
+
+# then create plots
+makePlot = function(data, label) {
+  ggplot(data[1:30,], aes(reorder(word, -freq), freq)) +
+         labs(x = label, y = "Frequency") +
+         theme(axis.text.x = element_text(angle = 60, size = 12, hjust = 1)) +
+         geom_bar(stat = "identity")
+}
+
+# Get frequencies of most common n-grams in data sample
+freq1 = getFreq(DTM1)
+freq2 = getFreq(DTM2)
+freq3 = getFreq(DTM3)
+freq4 = getFreq(DTM4)
+freq5 = getFreq(DTM5)
+```
+
+Let's finally plot frequencies...
+
+```{r plots, echo=TRUE}
+makePlot(freq1, "30 Most Common Unigrams")
+
+makePlot(freq2, "30 Most Common Bigrams")
+
+makePlot(freq3, "30 Most Common Trigrams")
+```
+
+... and word-clouds
+
+```{r wordclouds, echo=TRUE}
+wordcloud(words = DF1$word, freq = DF1$freq, min.freq = 1, max.words=200,
+          random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+
+wordcloud(words = DF2$word, freq = DF2$freq, min.freq = 1, max.words=200,
+          random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+
+wordcloud(words = DF3$word, freq = DF3$freq, min.freq = 1, max.words=200,
+          random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+```
+
+### Next steps
+
+This preliminary analysis will be a key element to build our prediction model. N-grams and their frequencies may be used to predict the likelihood of a word's sequence. Prediction algorithms such as random forest will be needed for this regard.
+The result will be a shiny web app, which will allow the user to choose a word, predicting the next one based on the prediction.
+
+
+
+
